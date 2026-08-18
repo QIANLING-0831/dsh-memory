@@ -14,8 +14,17 @@ DeepSeek Harness（DSH）记忆优化的社区插件集合（`dsh-plugin`）。�
 | [`dsh-memory-tool`](packages/dsh-memory-tool) | 模型可调用的 `memory_search` 工具（有界召回旧会话细节，支持 file 过滤） | ✅ Phase 1 |
 | [`dsh-compaction-locator`](packages/dsh-compaction-locator) | 近无损压缩：每个 `<compacted-summary>` 追加 Exact Sources 定位符（spill 路径/文件/seq 区间） | ✅ Phase 2 |
 | [`dsh-memory-core`](packages/dsh-memory-core) | 跨会话核心记忆（workspace 事实库 + 稳定 KV 安全注入 + `memory_remember` 工具） | ✅ Phase 2 |
+| [`dsh-memory-bundle`](packages/dsh-memory-bundle) | 元 bundle：一键安装全部插件（`dsh.bundle.patch`），禁用 base 的 session-query/compaction 行 | ✅ 集成 |
 
-自动注入因 DSH 扩展点限制改为模型主动调用（见提案第 9 节）；共 46 个单测。
+**已通过真机验证**（headless profile）：整树启动、`memory_remember` 写入、`memory_search` 混合召回、跨会话 Persistent Memory 注入——见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)。共 48 个单测。
+
+## 安装（真机验证过的路径）
+
+```sh
+# 把 pnpm 放到 PATH（Windows 无管理员时用 corepack shim 或手工）
+dsh plugin --profile headless add packages/dsh-memory-bundle
+# link 依赖未自动装时：cd $env:DSH_HOME/profiles/headless && pnpm install
+```
 
 ## 安装（npm 发布后）
 
