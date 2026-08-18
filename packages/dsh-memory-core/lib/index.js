@@ -257,7 +257,7 @@ const inject = ["systemPrompt", "tools"];
 const Config = MemoryCoreEngine.Config;
 /** Register the core memory service, its stable section, and the tool. */
 function apply(ctx, config) {
-	ctx.plugin(MemoryCoreEngine, config);
+	ctx.service("memoryCore", MemoryCoreEngine, config);
 	ctx.tools.register(createRememberTool(ctx, config));
 }
 //#endregion
