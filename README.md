@@ -25,8 +25,12 @@ dsh plugin --profile web add dsh-tool-result-dedup
 
 ## 发布
 
+- GitHub 仓库已加 **`dsh-plugin`** topic（官方 CONTRIBUTING 指引）。
+- **自动化发布（Trusted Publishing，推荐）**：仓库带 `.github/workflows/publish.yml`，打 tag 即自动发布两个包（无令牌、无验证码，OIDC 签名）：
+  1. 在 npm **Account Settings → Trusted Publishers** 添加发布者：仓库 `QIANLING-0831/dsh-memory`，工作流名 `publish`；
+  2. 本地发布一个版本：改 `packages/*/package.json` 的 `version` → commit → `git tag v0.1.0 && git push origin v0.1.0`。
+- **手动发布**：`npm login` 后 `npm publish`（账号开 2FA 时需 `--otp=<验证码>`）。
 - 每个包独立发布到 npm（`publishConfig.access: public`）。
-- GitHub 仓库请添加 **`dsh-plugin`** topic，便于社区发现（官方 CONTRIBUTING 指引）。
 - DSH 官方仓库当前不接受外部 PR，本仓库以"独立插件生态"方式贡献；CJK 分词缺陷可到 [deepseek-ai/deepseek-harness Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 报告。
 
 ## 测试

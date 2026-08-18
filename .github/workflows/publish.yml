@@ -1,0 +1,31 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# npm Trusted Publishing (OIDC): no secrets, no tokens — GitHub vouches for this
+# workflow to registry.npmjs.org. Requires the npm account to add this repo +
+# workflow name ("publish") as a Trusted Publisher under Account Settings →
+# Trusted Publishers → Add new publisher.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+      - run: corepack enable
+      - run: pnpm install --no-frozen-lockfile
+      # Publishes every non-private package in the workspace (root is private)
+      # with provenance attestation. `--no-git-checks` because per-package tags
+      # are not maintained in this monorepo layout.
+      - name: Publish packages with Trusted Publishing
+        run: pnpm -r publish --no-git-checks --access public --provenance
