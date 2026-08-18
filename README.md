@@ -10,8 +10,10 @@ DeepSeek Harness（DSH）记忆优化的社区插件集合（`dsh-plugin`）。�
 |---|---|---|
 | [`dsh-session-query-sqlite-cjk`](packages/dsh-session-query-sqlite-cjk) | 中文可用的会话全文检索 provider（FTS5 trigram 双表，查询自动路由） | ✅ Phase 0 |
 | [`dsh-tool-result-dedup`](packages/dsh-tool-result-dedup) | 工具结果内容哈希去重（重复结果替换为指针，省输入 Token） | ✅ Phase 0 |
+| [`dsh-memory-index`](packages/dsh-memory-index) | 混合记忆检索服务 `ctx.memorySearch`（sqlite-vec 向量臂 + FTS5 词法臂 RRF 融合） | ✅ Phase 1 |
+| [`dsh-memory-tool`](packages/dsh-memory-tool) | 模型可调用的 `memory_search` 工具（有界召回旧会话细节） | ✅ Phase 1 |
 
-后续 Phase 1（混合检索 + 按需注入 + `memory/search` 工具）、Phase 2（core 事实库 + 指针式压缩）规划见提案文档。
+后续 Phase 2（core 事实库 + 指针式压缩）规划见提案文档；自动注入因 DSH 扩展点限制改为模型主动调用（见提案第 9 节）。
 
 ## 安装（npm 发布后）
 

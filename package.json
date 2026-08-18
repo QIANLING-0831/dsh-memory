@@ -5,6 +5,6 @@
   "version": "0.1.0",
   "license": "MIT",
   "scripts": {
-    "test": "node --test packages/dsh-session-query-sqlite-cjk/test/cjk.test.js packages/dsh-tool-result-dedup/test/dedup.test.js packages/dsh-memory-index/test/memory-index.test.js"
+    "test": "node --test packages/dsh-session-query-sqlite-cjk/test/cjk.test.js packages/dsh-tool-result-dedup/test/dedup.test.js packages/dsh-memory-index/test/memory-index.test.js packages/dsh-memory-tool/test/memory-tool.test.js"
   }
 }

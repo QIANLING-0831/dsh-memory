@@ -203,3 +203,23 @@ Stage 3  合并 C1 ∪ topK → 注入前检查：
 | `dsh-token-meter` | 计量 | 注入预算唯一权威 |
 | `dsh-agent-loop` | 装配 | `agent/pre-step`（注入）、`tools/post-execute`（去重/索引）、`llm/stream`（KV 友好的嵌入/摘要） |
 | `dsh-output-retention` | head/tail 保留 | dedup 替换文案的预览复用 |
+
+---
+
+## 9. Phase 1 实施记录（2026-08）
+
+**已交付**：
+
+- `dsh-memory-index`：`ctx.memorySearch` 混合检索服务（sqlite-vec `vec0` 向量臂 + 已注册 `ctx.sessionQuery` 词法臂 → RRF 融合；事件级增量嵌入索引；本地 bge / char-overlap 嵌入可切换；容错永不抛错）。
+- `dsh-memory-tool`：模型可调用的 `memory_search` 工具（有界 snippet、命中臂标记、best-effort）。
+- 形态修正：**自动注入 → 模型主动调用**（Letta 式 recall），原因见下。
+
+**自动注入接缝分析（v0.1-rc.7，源码实证，三条路全否决）**：
+
+| 候选注入点 | 否决原因 |
+|---|---|
+| `agent/pre-step` messages | 循环 554 行强制 `session.append("user/message", {surfaceOp:"append"})` → 注入变成**持久化历史**，每步重发，Token 反膨胀 |
+| `llm/stream` 改 `options.messages` | 请求在 buildRequest 729 行被 `deepFreeze`，且 waterfall 默认闭包 `() => adapterStream(options, prepared)` 锁死原对象——**替换/变更均无效**（无任何现有插件监听过该事件） |
+| `system-prompt` section / `system-prompt/assemble` | 非持久化内容只能进 system prompt（请求最前），**每次变化使 KV 前缀缓存整段失效**，长会话反而更贵 |
+
+**结论**：v0.1 以 `memory_search` 工具交付召回价值（模型按需调用，零注入成本、零 KV 风险）；自动注入挂起，等待 DSH 提供"非持久化 + 尾部追加"接缝，或 Phase 2 用更强的推理评审替代方案（如受限的 turn 级稳定注入 + 预算门控）。
