@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import MemoryCoreEngine, { createRememberTool, normalizeContent, overlapSimilarity } from "../lib/index.js";
+import { MemoryCoreEngine, apply, createRememberTool, normalizeContent, overlapSimilarity } from "../lib/index.js";
 
 function stubCtx() {
 	const sections = [];
@@ -95,6 +95,19 @@ test("constructor registers the stable system-prompt section", async () => {
 	const section = ctx.sections.find((def) => def.name === "memory-core");
 	assert.ok(section, "memory-core section registered");
 	assert.equal(typeof section.text, "function");
+});
+
+test("apply registers the memory_remember tool (function-plugin entry)", () => {
+	const tools = [];
+	const ctx = {
+		reflect: { provide() {} },
+		systemPrompt: { section() {} },
+		tools: { register(def) { tools.push(def); } },
+		plugin: (Class, config) => { /* eslint-disable-next-line no-new */ new Class(ctx, config); }
+	};
+	apply(ctx, { path: ":memory:" });
+	assert.equal(tools.length, 1);
+	assert.equal(tools[0].name, "memory_remember");
 });
 
 test("memory_remember tool calls the service and formats results", async () => {

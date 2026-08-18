@@ -159,8 +159,8 @@ export class MemorySearchEngine extends Service {
 	_ready;
 	_closed = false;
 	constructor(ctx, config) {
-		super(ctx, config = resolveConfig(config));
-		this.config = config;
+		super(ctx, "memorySearch");
+		this.config = resolveConfig(config);
 	}
 	/** Lazily open the derived database and build the embedder on first use. */
 	async _open() {
@@ -430,7 +430,7 @@ function isAbort(error) {
 const name = "memory-index";
 const inject = ["sessions", "sessionQuery"];
 function apply(ctx, config) {
-	ctx.service("memorySearch", MemorySearchEngine, config);
+	ctx.plugin(MemorySearchEngine, config);
 }
 //#endregion
 export { MEMORY_APPLICATION_ID, MEMORY_SCHEMA_VERSION, apply, inject, name };

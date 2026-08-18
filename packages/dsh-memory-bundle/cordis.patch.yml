@@ -1,0 +1,44 @@
+# dsh-memory-bundle patch layer.
+# Applied after the dsh-base insert; rows here override base rows by id.
+#
+# Disables the base plain unicode61 session-query provider and the base
+# compaction backend, then inserts the dsh-memory plugin set. Paths are
+# relative so they resolve against the invoking workspace (headless) — use
+# absolute paths in a real deployment.
+
+- id: session-query-sqlite
+  disabled: true
+
+- id: compaction-basic
+  disabled: true
+
+- insert:
+    - id: session-query-sqlite-cjk
+      name: dsh-session-query-sqlite-cjk
+      config:
+        path: ./.dsh-verify/session-query-cjk.db
+        openAt: first-search
+
+    - id: tool-result-dedup
+      name: dsh-tool-result-dedup
+      config:
+        maxCacheBytes: 131072
+
+    - id: memory-index
+      name: dsh-memory-index
+      config:
+        path: ./.dsh-verify/memory-index.db
+        embedder:
+          kind: char-overlap
+        dims: 512
+
+    - id: memory-tool
+      name: dsh-memory-tool
+
+    - id: compaction-locator
+      name: dsh-compaction-locator
+
+    - id: memory-core
+      name: dsh-memory-core
+      config:
+        path: ./.dsh-verify/memory-core.db

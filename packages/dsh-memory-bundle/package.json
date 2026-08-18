@@ -1,0 +1,39 @@
+{
+  "name": "dsh-memory-bundle",
+  "description": "Meta-bundle: installs all dsh-memory plugins (CJK search, dedup, hybrid memory index, memory tool, compaction locator, core memory) into a DeepSeek Harness profile as one patch layer.",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QIANLING-0831/dsh-memory.git",
+    "directory": "packages/dsh-memory-bundle"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "bundle",
+    "memory"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "dsh-compaction-locator": "file:../dsh-compaction-locator",
+    "dsh-memory-core": "file:../dsh-memory-core",
+    "dsh-memory-index": "file:../dsh-memory-index",
+    "dsh-memory-tool": "file:../dsh-memory-tool",
+    "dsh-session-query-sqlite-cjk": "file:../dsh-session-query-sqlite-cjk",
+    "dsh-tool-result-dedup": "file:../dsh-tool-result-dedup"
+  }
+}

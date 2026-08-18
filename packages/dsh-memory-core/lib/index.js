@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Service } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { mkdir } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 //#region lib/types/index.js
@@ -99,13 +99,16 @@ export class MemoryCoreEngine extends Service {
 	/** Validated and defaulted configuration. */
 	config;
 	_db;
-	_ready;
 	/** workspace → rendered block (invalidated on every write). */
 	_blockCache = /* @__PURE__ */ new Map();
 	constructor(ctx, config) {
-		super(ctx, config = resolveConfig(config));
-		this.config = config;
-		if (config.enabled) {
+		super(ctx, "memoryCore");
+		this.config = resolveConfig(config);
+		// Open the derived database synchronously: the system-prompt section
+		// text must be sync, so cross-session facts must be readable without
+		// awaiting anything (DatabaseSync is synchronous by nature).
+		this._db = this._openSync(this.config.path);
+		if (this.config.enabled) {
 			// Stable KV-safe injection: the block changes only when facts change.
 			ctx.systemPrompt.section({
 				name: "memory-core",
@@ -114,28 +117,26 @@ export class MemoryCoreEngine extends Service {
 			});
 		}
 	}
-	async _ensureReady() {
-		this._ready ??= (async () => {
-			const actual = this.config.path === ":memory:" ? this.config.path : resolve(this.config.path);
-			if (actual !== ":memory:") await mkdir(dirname(actual), { recursive: true, mode: 448 });
-			const db = new DatabaseSync(actual);
-			try {
-				const { application_id: applicationId } = db.prepare("PRAGMA application_id").get();
-				const { user_version: version } = db.prepare("PRAGMA user_version").get();
-				if (applicationId !== 0 && applicationId !== CORE_APPLICATION_ID) throw new Error(`dsh-memory-core: database at "${actual}" belongs to another application`);
-				if (applicationId === 0 && db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT GLOB 'sqlite_*'").all().length > 0) throw new Error(`dsh-memory-core: database at "${actual}" is not an empty or recognized derived index`);
-				if (applicationId === CORE_APPLICATION_ID && version !== CORE_SCHEMA_VERSION) {
-					db.exec("DROP TABLE IF EXISTS core_facts");
-					db.exec("PRAGMA user_version = 0");
-				}
-				ensureSchema(db);
-				this._db = db;
-			} catch (error) {
-				db.close();
-				throw error;
+	/** Open (or create) the derived database synchronously. */
+	_openSync(path) {
+		const actual = path === ":memory:" ? path : resolve(path);
+		if (actual !== ":memory:") mkdirSync(dirname(actual), { recursive: true, mode: 448 });
+		const db = new DatabaseSync(actual);
+		try {
+			const { application_id: applicationId } = db.prepare("PRAGMA application_id").get();
+			const { user_version: version } = db.prepare("PRAGMA user_version").get();
+			if (applicationId !== 0 && applicationId !== CORE_APPLICATION_ID) throw new Error(`dsh-memory-core: database at "${actual}" belongs to another application`);
+			if (applicationId === 0 && db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT GLOB 'sqlite_*'").all().length > 0) throw new Error(`dsh-memory-core: database at "${actual}" is not an empty or recognized derived index`);
+			if (applicationId === CORE_APPLICATION_ID && version !== CORE_SCHEMA_VERSION) {
+				db.exec("DROP TABLE IF EXISTS core_facts");
+				db.exec("PRAGMA user_version = 0");
 			}
-		})();
-		return this._ready;
+			ensureSchema(db);
+			return db;
+		} catch (error) {
+			db.close();
+			throw error;
+		}
 	}
 	/**
 	* Remember a fact for a workspace. Dedupes by normalized content hash; when
@@ -145,7 +146,6 @@ export class MemoryCoreEngine extends Service {
 	* @returns `{ factId, merged }`.
 	*/
 	async remember(input) {
-		await this._ensureReady();
 		const db = this._db;
 		const workspace = input.workspace ?? "";
 		const topic = DEFAULT_TOPICS.includes(input.topic) ? input.topic : "general";
@@ -182,7 +182,6 @@ export class MemoryCoreEngine extends Service {
 	}
 	/** Delete a fact by id. */
 	async forget(factId) {
-		await this._ensureReady();
 		const row = this._db.prepare("SELECT workspace FROM core_facts WHERE fact_id = ?").get(factId);
 		if (row === void 0) return false;
 		this._db.prepare("DELETE FROM core_facts WHERE fact_id = ?").run(factId);
@@ -213,7 +212,9 @@ export class MemoryCoreEngine extends Service {
 	/** Close the database. */
 	close() {
 		if (this._db === void 0) return Promise.resolve();
-		return (this._ready ?? Promise.resolve()).then(() => this._db?.close());
+		this._db.close();
+		this._db = void 0;
+		return Promise.resolve();
 	}
 }
 /** Build the model-facing `memory_remember` tool (exported for tests). */
@@ -255,11 +256,13 @@ const name = "memory-core";
 const inject = ["systemPrompt", "tools"];
 /** Same schema as the service's static Config (module-level for the loader). */
 const Config = MemoryCoreEngine.Config;
-/** Register the core memory service, its stable section, and the tool. */
+/** Register the core memory service, its stable section, and the tool.
+* Function-plugin entry (no default export) so the loader resolves `inject`
+* before apply runs — `ctx.tools` is only guaranteed at apply time.
+*/
 function apply(ctx, config) {
-	ctx.service("memoryCore", MemoryCoreEngine, config);
+	ctx.plugin(MemoryCoreEngine, config);
 	ctx.tools.register(createRememberTool(ctx, config));
 }
 //#endregion
 export { Config, apply, inject, name };
-export default MemoryCoreEngine;
