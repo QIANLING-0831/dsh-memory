@@ -16,7 +16,7 @@ DeepSeek Harness（DSH）记忆优化的社区插件集合（`dsh-plugin`）。�
 | [`dsh-memory-core`](packages/dsh-memory-core) | 跨会话核心记忆（workspace 事实库 + 稳定 KV 安全注入 + `memory_remember` 工具） | ✅ Phase 2 |
 | [`dsh-memory-bundle`](packages/dsh-memory-bundle) | 元 bundle：一键安装全部插件（`dsh.bundle.patch`），禁用 base 的 session-query/compaction 行 | ✅ 集成 |
 
-**已通过真机验证**（headless profile）：整树启动、`memory_remember` 写入、`memory_search` 混合召回、跨会话 Persistent Memory 注入——见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)。共 48 个单测。
+**已通过真机验证**（headless profile）：整树启动、`memory_remember` 写入、`memory_search` 混合召回、跨会话 Persistent Memory 注入——见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)。共 47 个单测。
 
 ## 安装（真机验证过的路径）
 
