@@ -34,7 +34,7 @@ import { createTestEmbedder, createTransformersEmbedder, fingerprintOf } from ".
 /** SQLite application id protecting unrelated databases from derived resets. */
 const MEMORY_APPLICATION_ID = 1146308691;
 /** Current derived-index schema version. Incompatible versions reset in place. */
-const MEMORY_SCHEMA_VERSION = 1;
+const MEMORY_SCHEMA_VERSION = 2;
 /** FTS5-style reserved markers must not collide with indexed text; none used here. */
 /**
 * Resolve and validate plugin config with defaults.
@@ -78,6 +78,7 @@ function ensureSchema(db, dims) {
       time       INTEGER NOT NULL,
       surface    TEXT NOT NULL,
       text       TEXT NOT NULL,
+      files      TEXT NOT NULL DEFAULT '[]',
       UNIQUE (session_id, seq)
     ) STRICT
   `);
@@ -94,6 +95,38 @@ function ensureSchema(db, dims) {
     ) STRICT
   `);
 	db.exec(`PRAGMA user_version = ${MEMORY_SCHEMA_VERSION}`);
+}
+/**
+* Entity (file) tagging: for each tool/result event, the path argument of the
+* nearest preceding tool/call event. Log-only tool/call events carry the path;
+* the paired surface tool/result inherits it.
+* @param events - the session's raw event log.
+* @returns `Map<seq, string[]>` for tool/result seqs with a known file.
+*/
+function fileTagsBySeq(events) {
+	const result = /* @__PURE__ */ new Map();
+	let lastPath;
+	for (const event of events) {
+		if (event.type === "tool/call") {
+			const raw = event.data?.arguments;
+			const args = typeof raw === "string" ? parseJsonObject(raw) : raw;
+			const path = typeof args?.path === "string" && args.path.length > 0 ? args.path : typeof args?.file_path === "string" && args.file_path.length > 0 ? args.file_path : void 0;
+			if (path !== void 0) lastPath = path;
+		} else if (event.type === "tool/result") {
+			if (lastPath !== void 0) result.set(event.seq, [lastPath]);
+			lastPath = void 0;
+		}
+	}
+	return result;
+}
+/** Tolerant JSON-object parse for tool-call argument strings. */
+function parseJsonObject(value) {
+	try {
+		const parsed = JSON.parse(value);
+		return typeof parsed === "object" && parsed !== null ? parsed : void 0;
+	} catch {
+		return void 0;
+	}
 }
 /**
 * The hybrid memory search service.
@@ -201,17 +234,21 @@ export class MemorySearchEngine extends Service {
 			db.prepare("UPDATE session_index SET header_fingerprint = ? WHERE session_id = ?").run(headerFingerprint, id);
 			return 0;
 		}
-		const insertChunk = db.prepare("INSERT INTO chunks (session_id, seq, type, time, surface, text) VALUES (?, ?, ?, ?, ?, ?)");
+		const insertChunk = db.prepare("INSERT INTO chunks (session_id, seq, type, time, surface, text, files) VALUES (?, ?, ?, ?, ?, ?, ?)");
 		// node:sqlite binds JS numbers as REAL; sqlite-vec requires an INTEGER
 		// rowid, so the chunk id is CAST to INTEGER at bind time.
 		const insertVec = db.prepare("INSERT INTO chunk_vec (rowid, embedding) VALUES (CAST(? AS INTEGER), ?)");
+		// File-tag extraction: each tool/result carries the path of the nearest
+		// preceding tool/call (the entity index — "everything about src/a.ts").
+		const filesBySeq = fileTagsBySeq(session.events);
 		const texts = fresh.map((doc) => `${this._contextPrefix(doc)}${doc.text}`);
 		const vectors = await this._embedTexts(texts);
 		db.exec("BEGIN IMMEDIATE");
 		try {
 			for (let i = 0; i < fresh.length; i += 1) {
 				const doc = fresh[i];
-				const { lastInsertRowid } = insertChunk.run(id, doc.seq, doc.type, doc.time, doc.surface, doc.text);
+				const files = doc.type === "tool/result" ? filesBySeq.get(doc.seq) ?? [] : [];
+				const { lastInsertRowid } = insertChunk.run(id, doc.seq, doc.type, doc.time, doc.surface, doc.text, JSON.stringify(files));
 				insertVec.run(Number(lastInsertRowid), vectorToText(vectors[i]));
 			}
 			const maxSeq = fresh[fresh.length - 1].seq;
@@ -290,8 +327,8 @@ export class MemorySearchEngine extends Service {
 		const db = this._db;
 		const chunkById = /* @__PURE__ */ new Map();
 		const idBySeq = /* @__PURE__ */ new Map();
-		for (const entry of db.prepare("SELECT chunk_id, session_id, seq, type, time, surface, text FROM chunks WHERE session_id = ?").all(sessionId)) {
-			chunkById.set(Number(entry.chunk_id), entry);
+		for (const entry of db.prepare("SELECT chunk_id, session_id, seq, type, time, surface, text, files FROM chunks WHERE session_id = ?").all(sessionId)) {
+			chunkById.set(Number(entry.chunk_id), { ...entry, files: parseFiles(entry.files) });
 			idBySeq.set(entry.seq, Number(entry.chunk_id));
 		}
 		// Vector arm — kNN over all chunks, then scoped to this session in JS
@@ -335,7 +372,13 @@ export class MemorySearchEngine extends Service {
 			entry.vector = true;
 			scores.set(chunkId, entry);
 		}
-		const ranked = [...scores.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, limit);
+		const ranked = [...scores.entries()].sort((a, b) => b[1].score - a[1].score)
+			.filter(([chunkId]) => {
+				if (request.file === void 0) return true;
+				const files = chunkById.get(chunkId)?.files ?? [];
+				return files.some((file) => file.includes(request.file) || request.file.includes(file));
+			})
+			.slice(0, limit);
 		return ranked.map(([chunkId, meta]) => {
 			const chunk = chunkById.get(chunkId);
 			return {
@@ -345,6 +388,7 @@ export class MemorySearchEngine extends Service {
 				time: chunk.time,
 				surface: chunk.surface,
 				snippet: truncate(chunk.text, maxChars),
+				files: chunk.files ?? [],
 				matched: {
 					lexical: meta.lexical,
 					vector: meta.vector
@@ -368,6 +412,17 @@ export function vectorToText(vec) {
 /** Bound a string to `max` Unicode code points. */
 export function truncate(text, max) {
 	return Array.from(text).slice(0, max).join("");
+}
+/** Parse a chunk row's `files` JSON column (tolerant of malformed values). */
+export function parseFiles(value) {
+	if (Array.isArray(value)) return value;
+	if (typeof value !== "string") return [];
+	try {
+		const parsed = JSON.parse(value);
+		return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === "string") : [];
+	} catch {
+		return [];
+	}
 }
 function isAbort(error) {
 	return error instanceof Error && error.name === "AbortError";

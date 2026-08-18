@@ -223,3 +223,17 @@ Stage 3  合并 C1 ∪ topK → 注入前检查：
 | `system-prompt` section / `system-prompt/assemble` | 非持久化内容只能进 system prompt（请求最前），**每次变化使 KV 前缀缓存整段失效**，长会话反而更贵 |
 
 **结论**：v0.1 以 `memory_search` 工具交付召回价值（模型按需调用，零注入成本、零 KV 风险）；自动注入挂起，等待 DSH 提供"非持久化 + 尾部追加"接缝，或 Phase 2 用更强的推理评审替代方案（如受限的 turn 级稳定注入 + 预算门控）。
+
+---
+
+## 10. Phase 2 实施记录（2026-08）
+
+**已交付**：
+
+- `dsh-compaction-locator`：继承 `BasicCompactionEngine` 的 `summarize()` 钩子，每个 `<compacted-summary>` 末尾追加 **Exact Sources 定位符块**（seq 区间 + spill 文件路径 + 触碰文件路径），摘要从有损散文升级为"事实 + 定位符"近无损；shrink 校验 / retain / KV 重放前缀全部继承基类。
+- `dsh-memory-core`：`ctx.memoryCore` 跨会话事实库（workspace 级派生 SQLite，哈希去重 + 字符重叠相似合并）+ **稳定 system-prompt section 注入**（KV 安全：块只在事实写入时变化，前缀字节保持不变）+ `memory_remember` 模型工具。
+- **file 词条索引**：`dsh-memory-index` 为 tool/result 切块打 `files` 标签（从相邻 tool/call 的 `path`/`file_path` 参数提取，注意 arguments 是 JSON 字符串需解析）；`memory_search` 支持 `file` 过滤（子串匹配）——"改过 src/a.ts 的所有内容"类实体级召回。
+
+**关键发现**：core 事实的稳定 section 注入是 Phase 1 接缝分析后唯一 KV 安全的注入形态——**稳定性是注入安全性的前提**（内容不变则 KV 前缀不变）。
+
+**46 个单测全绿**（6 包）。

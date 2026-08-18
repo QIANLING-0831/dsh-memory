@@ -116,3 +116,32 @@ test("search never throws — best-effort on missing session", async () => {
 	const hits = await memory.search({ sessionId: "no-such-session", query: "中文", limit: 3 });
 	assert.ok(Array.isArray(hits), "should resolve to an array");
 });
+
+test("file-tag filter restricts hits to the touched file", async () => {
+	// A log with a tool/call (log-only, carries the path) + tool/result pair.
+	const fileEvents = [
+		{ seq: 0, time: NOW, type: "user/message", surfaceOp: "append", data: { content: [{ type: "text", text: "看看 src/a.ts" }] } },
+		{ seq: 1, time: NOW + 100, type: "tool/call", data: { name: "read", arguments: JSON.stringify({ path: "src/a.ts" }) } },
+		{ seq: 2, time: NOW + 200, type: "tool/result", surfaceOp: "append", data: { message: { content: [{ type: "text", text: "export const a = 1" }] } } },
+		{ seq: 3, time: NOW + 300, type: "assistant/message", surfaceOp: "append", data: { message: { content: [{ type: "text", text: "好的，已读取" }] } } }
+	];
+	const fileHeader = { version: 1, id: "file-session", createdAt: NOW };
+	const ctx = {
+		reflect: { provide() {} },
+		sessions: {
+			list: () => [{ header: fileHeader, events: fileEvents }],
+			get: (id) => (id === "file-session" ? { header: fileHeader, events: fileEvents } : void 0)
+		},
+		inject: () => ({ dispose() {} }),
+		effect: () => () => {},
+		logger: console
+	};
+	const cjk = new CjkSessionQueryEngine(ctx, { path: ":memory:", openAt: "startup" });
+	ctx.sessionQuery = cjk;
+	const memory = new MemorySearchEngine(ctx, { path: ":memory:", embedder: { kind: "char-overlap" }, maxChars: 200 });
+	const filtered = await memory.search({ sessionId: "file-session", query: "export const", limit: 5, file: "src/a.ts" });
+	assert.ok(filtered.length > 0, "expected a file-tagged hit");
+	assert.ok(filtered.every((hit) => (hit.files ?? []).some((file) => file.includes("src/a.ts"))), `hit files: ${JSON.stringify(filtered.map((h) => h.files))}`);
+	const miss = await memory.search({ sessionId: "file-session", query: "export const", limit: 5, file: "src/nope.ts" });
+	assert.equal(miss.length, 0);
+});

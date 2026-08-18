@@ -56,6 +56,10 @@ export function createMemorySearchTool(ctx, config) {
 			max_chars: {
 				type: "integer",
 				description: `Maximum characters per snippet (default ${config.defaultMaxChars}, max 4000).`
+			},
+			file: {
+				type: "string",
+				description: "Optional: only return memories touching this file path (substring match on the indexed path)."
 			}
 		},
 		output: {
@@ -72,7 +76,8 @@ export function createMemorySearchTool(ctx, config) {
 					sessionId,
 					query: String(args.query ?? ""),
 					limit,
-					maxChars
+					maxChars,
+					...typeof args.file === "string" && args.file.length > 0 ? { file: args.file } : {}
 				}, exec);
 				return formatResult(hits, limit);
 			} catch (error) {

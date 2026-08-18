@@ -95,3 +95,12 @@ test("execute handles a missing agent gracefully", async () => {
 	const out = await tool.execute({ query: "x" }, { signal: undefined });
 	assert.ok(out.includes("no session context"));
 });
+
+test("execute passes the file filter through to memorySearch", async () => {
+	calls.length = 0;
+	const ctx = stubCtx(sampleHits);
+	const tool = createMemorySearchTool(ctx, { defaultLimit: 3, defaultMaxChars: 600 });
+	const exec = { agent: { session: { header: { id: "s1" } } }, signal: undefined };
+	await tool.execute({ query: "EPERM", file: "src/a.ts" }, exec);
+	assert.equal(calls[0].file, "src/a.ts");
+});
