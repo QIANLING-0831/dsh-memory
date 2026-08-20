@@ -42,3 +42,8 @@
       name: dsh-memory-core
       config:
         path: ./.dsh-verify/memory-core.db
+
+    - id: memory-skills
+      name: dsh-memory-skills
+      config:
+        path: ./.dsh-verify/memory-skills.db
