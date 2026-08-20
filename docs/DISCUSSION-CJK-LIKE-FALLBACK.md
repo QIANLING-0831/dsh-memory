@@ -1,4 +1,4 @@
-# 跟进 #3671：1–2 字中文查询已修复（trigram + LIKE 回退，源码级验证）
+# 评论区说「1-2 字中文 trigram 必 0 命中」——我验证了，然后修好了（附完整对照表）
 
 > 发布地址：https://github.com/deepseek-ai/deepseek-harness/discussions （点 New discussion，分类选 **Ideas** 或 **General**）
 > 标题与正文如下，可直接复制粘贴。
@@ -7,7 +7,7 @@
 
 ## 标题
 
-**跟进 #3671：1–2 字中文查询的 LIKE 回退已落地 —— trigram 方案的最后一块拼图（源码 + 实测）**
+**评论区说「1-2 字中文 trigram 必 0 命中」——我验证了，然后修好了（附完整对照表）**
 
 ## 正文
 
