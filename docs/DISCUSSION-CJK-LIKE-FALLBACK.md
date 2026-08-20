@@ -59,15 +59,24 @@
 
 另注：trigram 的 `case_sensitive` 默认关闭（与 unicode61 的大小写折叠一致），保持默认即可不回归英文/代码检索。
 
-### 5. 想请教社区
+### 5. 生态快照：记忆是 DSH 的验证刚需，而整个生态的地基检索是坏的
+
+- 官方讨论区已有 [「求一个 memory 能力」（#14）](https://github.com/deepseek-ai/deepseek-harness/discussions/14)，社区半年内涌现 **20+ 记忆插件**（含 3 个 100+ 星项目：dsh-memory-evolve 205⭐ / dsh-mnemon 136⭐ / dsh-noema 116⭐）——记忆是 DSH 被反复验证的刚需。
+- **关键观察**：多数记忆插件（dsh-memo、dsh-meow-memory、dsh-mnemon 等）都建立在官方 `sessionQuery` 之上——unicode61 的中文缺陷意味着**整个记忆生态的中文召回被同一个地基缺陷拖累**。本 fork 修复的不只是我们自己的插件，而是所有依赖 sessionQuery 的记忆插件共同的地基。
+- 自进化方向已有完整先例（[dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 的"技能自我进化 + 技能管理器"基本对应 Hermes Agent 的记忆思路）；我们不自称蓝海，差异化在地基：**CJK 检索（生态唯一）+ tool-result 去重 + KV-safe 稳定注入 + compaction 来源定位**。
+- 完整 20+ 项目对照表（含 **license 自查项**）见仓库 [docs/DSH-MEMORY-ECOSYSTEM.md](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/DSH-MEMORY-ECOSYSTEM.md)。
+- 给官方的推论：**记忆基础设施（检索质量 + 注入接缝）值得官方投入**——生态都在上面；而"非持久化 + KV 友好"注入接缝的缺失，让每个"自动注入"型插件都在翻同一道墙（dsh-layered-memory 的"每步自动注入"即一例）。
+
+### 6. 想请教社区
 
 - 1–2 字中文查询的 LIKE 回退是**线性扫描**（FTS5 的 LIKE 优化要求模式含 ≥3 个非通配字符，短查询用不上），大语料下是性能取舍——社区怎么看这个 v1 形态？
 - v2 方向：对 2 字词做 **bigram 索引**（更复杂，但能把短查询也拉回索引路径），是否值得做？
 - 上帖问过的小而聚焦 PR（~50 行 + 测试）接受度，希望听到官方或贡献者的明确意见；若 PR 暂不开放，"文档类"贡献（README 补充 unicode61 对中文不可用的已知限制）是否可行？
 
-### 6. 仓库与安装
+### 7. 仓库与安装
 
 - 代码：**https://github.com/QIANLING-0831/dsh-memory-plus**（`packages/dsh-session-query-sqlite-cjk`）
-- 上帖 #3671 全文含插件集介绍、真机验证报告与安装路径；本迭代的 README（含对照表）见包内 `README.md`。
+- 上帖 #3671 全文含插件集介绍、真机验证报告与安装路径；本迭代的 README（含对照表）见包内 `README.md`；
+- DSH 记忆生态盘点（20+ 项目 + license 自查）见 [`docs/DSH-MEMORY-ECOSYSTEM.md`](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/DSH-MEMORY-ECOSYSTEM.md)。
 
 欢迎试用、提 issue、评论指正。
