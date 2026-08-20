@@ -9,7 +9,9 @@ import { dirname, resolve } from "node:path";
 * Fork of @deepseek-ai/dsh-session-query-sqlite (MIT) with CJK-aware FTS5 tables.
 * Modifications: dual-tokenizer indexing — upstream unicode61 plus trigram
 * `*_cjk` tables for Chinese substring recall; queries route to the trigram
-* tables when the query contains CJK characters. All other behavior is upstream's.
+* tables when they contain CJK characters, with a LIKE substring fallback for
+* 1-2 character CJK queries that cannot form any trigram. All other behavior
+* is upstream's.
 */
 /** SQLite schema for the disposable session full-text read model. */
 /** Current derived-index schema version. Incompatible versions reset in place. */
@@ -64,9 +66,11 @@ async function openSearchDatabase(path, journalMode) {
 		const { application_id: applicationId } = db.prepare("PRAGMA application_id").get();
 		const { user_version: version } = db.prepare("PRAGMA user_version").get();
 		const userTables = listUserTables(db);
-		if (applicationId !== 0 && applicationId !== 1146308689) throw new Error(`session-search database at "${actual}" belongs to another application`);
+		/* Legacy upstream ids migrate in place; this fork's own id is the canonical one. */
+		const recognizedDerived = applicationId === 1146308689 || applicationId === CJK_QUERY_SQLITE_APPLICATION_ID;
+		if (applicationId !== 0 && !recognizedDerived) throw new Error(`session-search database at "${actual}" belongs to another application`);
 		if (applicationId === 0 && userTables.length > 0) throw new Error(`session-search database at "${actual}" is not an empty or recognized derived index`);
-		if (applicationId === 1146308689) {
+		if (recognizedDerived) {
 			assertDerivedUserTables(actual, userTables);
 			if (version !== CJK_QUERY_SQLITE_SCHEMA_VERSION) resetDerivedSchema(db, userTables);
 		}
@@ -847,13 +851,14 @@ var CjkSessionQueryEngine = class extends SessionQueryEngine {
 		}
 	}
 	_querySessions(request, offset, persistenceBinding) {
-		const selected = selectedDocumentsSql(containsCjk(request.query));
+		const mode = queryMatchMode(request.query);
+		const selected = selectedDocumentsSql(mode);
 		const sessionWhere = buildSessionWhere(request.sessionFilters);
 		const eventWhere = buildEventWhere(request.eventFilters);
 		assertFts5OuterPredicateCount(sessionWhere.predicateCount + eventWhere.predicateCount);
 		const where = [sessionWhere.sql, eventWhere.sql].filter(Boolean).join(" AND ");
 		const bindings = [
-			...selectedDocumentsParams(request.query, persistenceBinding.service !== void 0),
+			...selectedDocumentsParams(mode, request.query, persistenceBinding.service !== void 0),
 			...sessionWhere.params,
 			...eventWhere.params,
 			request.limit + 1,
@@ -879,12 +884,13 @@ var CjkSessionQueryEngine = class extends SessionQueryEngine {
     `).all(...bindings);
 	}
 	_queryEvents(request, offset, persistenceBinding) {
-		const selected = selectedDocumentsSql(containsCjk(request.query));
+		const mode = queryMatchMode(request.query);
+		const selected = selectedDocumentsSql(mode);
 		const eventWhere = buildEventWhere(request.filters);
 		assertFts5OuterPredicateCount(1 + eventWhere.predicateCount);
 		const where = ["session_id = ?", eventWhere.sql].filter(Boolean).join(" AND ");
 		const bindings = [
-			...selectedDocumentsParams(request.query, persistenceBinding.service !== void 0),
+			...selectedDocumentsParams(mode, request.query, persistenceBinding.service !== void 0),
 			request.sessionId,
 			...eventWhere.params,
 			request.limit + 1,
@@ -972,9 +978,93 @@ const CJK_CHARACTER_RE = /[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]
 function containsCjk(query) {
 	return CJK_CHARACTER_RE.test(query);
 }
-function selectedDocumentsSql(useCjk) {
+/**
+* Pick the FTS5 access path for a query.
+* - ASCII-only queries keep upstream behavior on the unicode61 tables.
+* - CJK queries of at least 3 characters go to the trigram tables, whose index
+*   covers every 3-character substring (mixed queries like "Token消耗" included).
+* - CJK queries shorter than 3 characters cannot form any trigram, so an FTS5
+*   MATCH on the trigram tables can never hit them; they fall back to a LIKE
+*   substring scan on the same tables (correct for 1-2 character queries, the
+*   common Chinese query shape).
+*/
+function queryMatchMode(query) {
+	if (!containsCjk(query)) return "unicode61";
+	return Array.from(query).length < 3 ? "like" : "trigram";
+}
+/** Escape LIKE wildcards so a caller query matches only its literal text. */
+function escapeLike(query) {
+	return query.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+function selectedDocumentsSql(mode) {
+	const useCjk = mode !== "unicode61";
 	const persistedDocs = useCjk ? "persisted_docs_cjk" : "persisted_docs";
 	const liveDocs = useCjk ? "live_docs_cjk" : "live_docs";
+	if (mode === "like") {
+		return { sql: `WITH candidates AS (
+      SELECT
+        pd.session_id AS session_id,
+        ps.version AS version,
+        ps.created_at AS created_at,
+        ps.cwd AS cwd,
+        ps.parent_session AS parent_session,
+        ps.seed_length AS seed_length,
+        ps.delegation_depth AS delegation_depth,
+        ps.agent_preset AS agent_preset,
+        0 AS live,
+        1 AS persisted,
+        CAST(pd.seq AS INTEGER) AS seq,
+        pd.type AS type,
+        CAST(pd.time AS INTEGER) AS time,
+        pd.surface AS surface,
+        CASE WHEN instr(pd.text, ?) > 0 THEN
+          substr(pd.text, 1, instr(pd.text, ?) - 1) || ? ||
+          substr(pd.text, instr(pd.text, ?), length(?)) || ? ||
+          substr(pd.text, instr(pd.text, ?) + length(?))
+        ELSE pd.text END AS marked_text,
+        CAST(
+          (length(CAST(pd.text AS BLOB)) - length(CAST(replace(pd.text, ?, '') AS BLOB))) / ?
+          AS INTEGER
+        ) AS match_count,
+        CAST(pd.codepoint_length AS INTEGER) AS document_length
+      FROM ${persistedDocs} AS pd
+      JOIN persisted_sessions AS ps ON ps.id = pd.session_id
+      WHERE pd.text LIKE ? ESCAPE '\\'
+        AND ? = 1
+        AND NOT EXISTS (SELECT 1 FROM temp.live_sessions AS ls WHERE ls.id = pd.session_id)
+      UNION ALL
+      SELECT
+        ld.session_id AS session_id,
+        ls.version AS version,
+        ls.created_at AS created_at,
+        ls.cwd AS cwd,
+        ls.parent_session AS parent_session,
+        ls.seed_length AS seed_length,
+        ls.delegation_depth AS delegation_depth,
+        ls.agent_preset AS agent_preset,
+        1 AS live,
+        CASE WHEN ? = 1 THEN ls.persisted ELSE 0 END AS persisted,
+        CAST(ld.seq AS INTEGER) AS seq,
+        ld.type AS type,
+        CAST(ld.time AS INTEGER) AS time,
+        ld.surface AS surface,
+        CASE WHEN instr(ld.text, ?) > 0 THEN
+          substr(ld.text, 1, instr(ld.text, ?) - 1) || ? ||
+          substr(ld.text, instr(ld.text, ?), length(?)) || ? ||
+          substr(ld.text, instr(ld.text, ?) + length(?))
+        ELSE ld.text END AS marked_text,
+        CAST(
+          (length(CAST(ld.text AS BLOB)) - length(CAST(replace(ld.text, ?, '') AS BLOB))) / ?
+          AS INTEGER
+        ) AS match_count,
+        CAST(ld.codepoint_length AS INTEGER) AS document_length
+      FROM temp.${liveDocs} AS ld
+      JOIN temp.live_sessions AS ls ON ls.id = ld.session_id
+      WHERE ld.text LIKE ? ESCAPE '\\'
+    ), matched AS (
+      SELECT * FROM candidates
+    )` };
+	}
 	return { sql: `WITH candidates AS (
       SELECT
         pd.session_id AS session_id,
@@ -1028,9 +1118,22 @@ function selectedDocumentsSql(useCjk) {
       FROM candidates
     )` };
 }
-function selectedDocumentsParams(query, persistenceVisible) {
-	const expression = quoteFtsData(query);
+function selectedDocumentsParams(mode, query, persistenceVisible) {
 	const visible = persistenceVisible ? 1 : 0;
+	if (mode === "like") {
+		const pattern = `%${escapeLike(query)}%`;
+		const bytes = Buffer.byteLength(query, "utf8");
+		return [
+			query, query, "﷐", query, query, "﷑", query, query,
+			query, bytes,
+			pattern, visible,
+			visible,
+			query, query, "﷐", query, query, "﷑", query, query,
+			query, bytes,
+			pattern
+		];
+	}
+	const expression = quoteFtsData(query);
 	return [
 		"﷐",
 		"﷑",

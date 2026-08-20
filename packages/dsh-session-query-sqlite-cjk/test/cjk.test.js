@@ -28,15 +28,30 @@ const events = [
 		type: "tool/result",
 		surfaceOp: "append",
 		data: { message: { content: [{ type: "text", text: "SELECT * FROM persisted_docs WHERE 索引优化 MATCH ?" }] } }
+	},
+	{
+		seq: 3,
+		time: NOW + 3000,
+		type: "tool/result",
+		surfaceOp: "append",
+		data: { message: { content: [{ type: "text", text: "进度100%完成" }] } }
+	},
+	{
+		seq: 4,
+		time: NOW + 4000,
+		type: "assistant/message",
+		surfaceOp: "append",
+		data: { message: { content: [{ type: "text", text: "索引优化减少Token消耗的句子" }] } }
 	}
 ];
 
 const header = { version: 1, id: SESSION_ID, createdAt: NOW };
 
 function stubCtx() {
+	const session = { id: SESSION_ID, header, events };
 	const sessions = {
-		list: () => [{ header, events }],
-		get: (id) => (id === SESSION_ID ? { header, events } : void 0)
+		list: () => [session],
+		get: (id) => (id === SESSION_ID ? session : void 0)
 	};
 	return {
 		reflect: { provide() {} },
@@ -56,6 +71,40 @@ async function withEngine(fn) {
 	}
 }
 
+// A ctx whose session lives only behind the optional sessionPersistence service,
+// exercising the persisted_docs_cjk branch of the search queries.
+function persistedStubCtx() {
+	const sessions = {
+		list: () => [],
+		get: () => void 0
+	};
+	return {
+		reflect: { provide() {} },
+		sessions,
+		inject: (deps, callback) => {
+			if (Array.isArray(deps) && deps.includes("sessionPersistence") && typeof callback === "function") {
+				const service = {
+					listSnapshots: async () => [{ revision: "r1", header }],
+					inspect: async () => ({ meta: header, events })
+				};
+				callback({ sessionPersistence: service, effect: () => () => {} });
+			}
+			return { dispose() {} };
+		},
+		effect: () => () => {},
+		logger: console
+	};
+}
+
+async function withPersistedEngine(fn) {
+	const engine = new CjkSessionQueryEngine(persistedStubCtx(), { path: ":memory:", openAt: "startup" });
+	try {
+		return await fn(engine);
+	} finally {
+		await engine.close();
+	}
+}
+
 test("CJK query hits via the trigram table (upstream unicode61 cannot match this)", async () => {
 	await withEngine(async (engine) => {
 		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "中文分词", limit: 10 });
@@ -64,11 +113,53 @@ test("CJK query hits via the trigram table (upstream unicode61 cannot match this
 	});
 });
 
+test("mixed CJK+ASCII query hits via the trigram table", async () => {
+	await withEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "Token消耗", limit: 10 });
+		assert.equal(page.items.length, 1, "expected exactly the mixed-script document");
+		assert.ok(page.items[0].snippet.includes("Token消耗"), `snippet should contain the query: ${page.items[0].snippet}`);
+	});
+});
+
 test("ASCII query still hits via the unicode61 table (fallback preserved)", async () => {
 	await withEngine(async (engine) => {
 		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "trigram", limit: 10 });
 		assert.ok(page.items.length > 0, "expected at least one ASCII hit");
 		assert.ok(page.items[0].snippet.includes("trigram"));
+	});
+});
+
+test("2-character CJK query hits via the LIKE fallback (trigram MATCH cannot)", async () => {
+	await withEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "中文", limit: 10 });
+		assert.ok(page.items.length >= 2, "expected both 中文-containing documents");
+		assert.ok(page.items[0].snippet.includes("中文"), `snippet should contain the query: ${page.items[0].snippet}`);
+	});
+});
+
+test("1-character CJK query hits via the LIKE fallback", async () => {
+	await withEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "优", limit: 10 });
+		assert.ok(page.items.length >= 3, "expected all 优化-containing documents");
+		assert.ok(page.items[0].snippet.includes("优"), `snippet should contain the query: ${page.items[0].snippet}`);
+	});
+});
+
+test("LIKE fallback escapes wildcards: '%' in the query matches only its literal text", async () => {
+	await withEngine(async (engine) => {
+		// "完%" would match "完成" if the wildcard were not escaped; only a literal "完%" hits.
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "完%", limit: 10 });
+		assert.equal(page.items.length, 0, "escaped wildcard query must not match 完成");
+		const literal = await engine.searchEvents({ sessionId: SESSION_ID, query: "成", limit: 10 });
+		assert.equal(literal.items.length, 1, "expected exactly the 完成-containing document");
+		assert.ok(literal.items[0].snippet.includes("成"));
+	});
+});
+
+test("a short CJK query absent from the log returns no hits", async () => {
+	await withEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "量子", limit: 10 });
+		assert.equal(page.items.length, 0);
 	});
 });
 
@@ -81,9 +172,34 @@ test("CJK session-level search returns the session with its best match", async (
 	});
 });
 
+test("short CJK session-level search works via the LIKE fallback", async () => {
+	await withEngine(async (engine) => {
+		const page = await engine.searchSessions({ query: "中文", limit: 10 });
+		assert.ok(page.items.length > 0, "expected at least one session hit");
+		assert.equal(page.items[0].header.id, SESSION_ID);
+		assert.ok(page.items[0].bestMatch.snippet.includes("中文"));
+	});
+});
+
 test("a CJK query absent from the log returns no hits", async () => {
 	await withEngine(async (engine) => {
 		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "量子计算", limit: 10 });
 		assert.equal(page.items.length, 0);
+	});
+});
+
+test("persisted-only session matches via the LIKE fallback", async () => {
+	await withPersistedEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "中文", limit: 10 });
+		assert.ok(page.items.length >= 2, "expected persisted 中文-containing documents");
+		assert.ok(page.items[0].snippet.includes("中文"));
+	});
+});
+
+test("persisted-only session matches via the trigram table", async () => {
+	await withPersistedEngine(async (engine) => {
+		const page = await engine.searchEvents({ sessionId: SESSION_ID, query: "Token消耗", limit: 10 });
+		assert.equal(page.items.length, 1, "expected exactly the persisted mixed-script document");
+		assert.ok(page.items[0].snippet.includes("Token消耗"));
 	});
 });

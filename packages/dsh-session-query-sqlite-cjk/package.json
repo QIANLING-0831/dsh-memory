@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-query-sqlite-cjk",
-  "description": "CJK-aware ctx.sessionQuery backend for the DeepSeek Harness — SQLite FTS5 provider with a trigram tokenizer table so Chinese full-text search actually matches (upstream unicode61 does not segment CJK).",
-  "version": "0.1.0",
+  "description": "CJK-aware ctx.sessionQuery backend for the DeepSeek Harness — SQLite FTS5 provider with a trigram tokenizer table so Chinese full-text search actually matches (upstream unicode61 does not segment CJK), plus a LIKE fallback for 1-2 character CJK queries.",
+  "version": "0.2.0",
   "publishConfig": {
     "access": "public"
   },
