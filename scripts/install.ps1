@@ -13,14 +13,15 @@ $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 Write-Host "==> [1/2] install dsh-memory-bundle (profile layer)"
 dsh plugin --profile $Profile add (Join-Path $root "packages\dsh-memory-bundle")
 
-Write-Host "==> [2/2] install the 6 plugin packages (loader resolves them from the profile root)"
+Write-Host "==> [2/2] install the 7 plugin packages (loader resolves them from the profile root)"
 $packages = @(
     "dsh-session-query-sqlite-cjk",
     "dsh-tool-result-dedup",
     "dsh-memory-index",
     "dsh-memory-tool",
     "dsh-compaction-locator",
-    "dsh-memory-core"
+    "dsh-memory-core",
+    "dsh-memory-skills"
 ) | ForEach-Object { Join-Path $root "packages\$_" }
 dsh plugin --profile $Profile add @packages
 

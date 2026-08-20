@@ -78,8 +78,9 @@
 
 ```sh
 # 把 pnpm 放到 PATH（Windows 无管理员权限时可用 corepack shim）
-dsh plugin --profile headless add packages/dsh-memory-bundle
+dsh plugin --profile headless add ./packages/dsh-memory-bundle
+dsh plugin --profile headless add ./packages/dsh-memory-skills
 # link 依赖未自动装时：cd $env:DSH_HOME/profiles/headless && pnpm install
 ```
 
-仓库代码含 47 个单测（node --test），欢迎试用、提 issue、PR。
+仓库代码含 65 个单测（node --test），欢迎试用、提 issue、PR。

@@ -573,4 +573,3 @@ function apply(ctx, config) {
 }
 //#endregion
 export { Config, DEFAULT_EVOLVE_PROMPT, SKILLS_APPLICATION_ID, SKILLS_SCHEMA_VERSION, apply, inject, name, resolveConfig };
-export default apply;

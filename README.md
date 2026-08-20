@@ -119,10 +119,12 @@ cd dsh-memory
 ```sh
 git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
 cd dsh-memory
-dsh plugin --profile <profile> add packages/dsh-memory-bundle
-dsh plugin --profile <profile> add packages/dsh-session-query-sqlite-cjk packages/dsh-tool-result-dedup packages/dsh-memory-index packages/dsh-memory-tool packages/dsh-compaction-locator packages/dsh-memory-core packages/dsh-memory-skills
+dsh plugin --profile <profile> add ./packages/dsh-memory-bundle
+dsh plugin --profile <profile> add ./packages/dsh-session-query-sqlite-cjk ./packages/dsh-tool-result-dedup ./packages/dsh-memory-index ./packages/dsh-memory-tool ./packages/dsh-compaction-locator ./packages/dsh-memory-core ./packages/dsh-memory-skills
 cd $env:DSH_HOME/profiles/<profile> && pnpm install
 ```
+
+> 注意：`dsh plugin add` 的本地路径参数必须带 `./` 前缀（裸写 `packages/...` 会被 pnpm 当成 git 依赖）。需要 `dsh` 和 `pnpm` 都在 PATH（pnpm 可用 `corepack pnpm` 桥接）。
 
 ### 方式三：下载 Release 源码包
 

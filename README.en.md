@@ -89,8 +89,10 @@ git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
 cd dsh-memory-plus
 # Windows one-shot:
 .\scripts\install.ps1 -Profile headless
-# or manually:
-dsh plugin --profile <profile> add packages/dsh-memory-bundle
+# or manually (local paths MUST carry the ./ prefix, otherwise pnpm treats
+# them as git specs; dsh and pnpm must be on PATH — pnpm can be shimmed via corepack):
+dsh plugin --profile <profile> add ./packages/dsh-memory-bundle
+dsh plugin --profile <profile> add ./packages/dsh-memory-skills
 cd $env:DSH_HOME/profiles/<profile> && pnpm install
 ```
 
