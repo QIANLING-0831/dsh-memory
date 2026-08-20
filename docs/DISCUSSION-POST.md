@@ -24,7 +24,7 @@
 
 ### 2. 插件集介绍（均已开源，`dsh-plugin` 话题，47 个单测）
 
-仓库：**https://github.com/QIANLING-0831/dsh-memory-plus**
+仓库：**https://github.com/QIANLING-0831/dsh-memory**
 
 | 包 | 作用 | 阶段 |
 |---|---|---|

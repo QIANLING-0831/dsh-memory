@@ -55,9 +55,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.1
         version: 3.18.1
-      '@qianling/memory-engine':
-        specifier: workspace:*
-        version: link:../memory-engine
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.1
@@ -143,14 +140,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.1
         version: 3.18.1
-
-  packages/kimi-memory-plugin:
-    dependencies:
-      '@qianling/memory-engine':
-        specifier: workspace:*
-        version: link:../memory-engine
-
-  packages/memory-engine: {}
 
 packages:
 

@@ -19,7 +19,7 @@
   `"索引优化"` against `索引优化减少Token消耗的句子` returns zero hits;
   the same text matches under a `trigram` tokenizer). A dual-tokenizer
   provider (`dsh-session-query-sqlite-cjk`) demonstrates the fix; see
-  https://github.com/QIANLING-0831/dsh-memory-plus.
+  https://github.com/QIANLING-0831/dsh-memory.
 ```
 
 **提交信息建议**：
