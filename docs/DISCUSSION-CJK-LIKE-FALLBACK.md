@@ -63,7 +63,8 @@
 
 - 官方讨论区已有 [「求一个 memory 能力」（#14）](https://github.com/deepseek-ai/deepseek-harness/discussions/14)，社区半年内涌现 **20+ 记忆插件**（含 3 个 100+ 星项目：dsh-memory-evolve 205⭐ / dsh-mnemon 136⭐ / dsh-noema 116⭐）——记忆是 DSH 被反复验证的刚需。
 - **关键观察**：多数记忆插件（dsh-memo、dsh-meow-memory、dsh-mnemon 等）都建立在官方 `sessionQuery` 之上——unicode61 的中文缺陷意味着**整个记忆生态的中文召回被同一个地基缺陷拖累**。本 fork 修复的不只是我们自己的插件，而是所有依赖 sessionQuery 的记忆插件共同的地基。
-- 自进化方向已有完整先例（[dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 的"技能自我进化 + 技能管理器"基本对应 Hermes Agent 的记忆思路）；我们不自称蓝海，差异化在地基：**CJK 检索（生态唯一）+ tool-result 去重 + KV-safe 稳定注入 + compaction 来源定位**。
+- 自进化方向已有完整先例（[dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 的"技能自我进化 + 技能管理器"基本对应 Hermes Agent 的记忆思路）。**本迭代顺势补齐了同一能力**：新增 `dsh-memory-skills`（Phase 3）——模型可调用的 `skill_write/delete/list` 写 DSH 原生技能文件（写入即进会话技能目录），外加**后台反思蒸馏**（定时、水位线 + 冷却 + 启发式门槛，请求路径零开销，fire-and-forget，全部动作记入 `skill_events` 日志；技能文件是纯 Markdown，卸载插件不丢）。
+- 至此本仓库的差异化 = **CJK 检索（生态唯一）+ 技能自我进化 + tool-result 去重 + KV-safe 稳定注入 + compaction 来源定位**——自进化不再是别人的专利，但我们的形态小而聚焦（`dsh-memory-skills` ~700 行），与 evolve 的五轨大而全单体互补。
 - 完整 20+ 项目对照表（含 **license 自查项**）见仓库 [docs/DSH-MEMORY-ECOSYSTEM.md](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/DSH-MEMORY-ECOSYSTEM.md)。
 - 给官方的推论：**记忆基础设施（检索质量 + 注入接缝）值得官方投入**——生态都在上面；而"非持久化 + KV 友好"注入接缝的缺失，让每个"自动注入"型插件都在翻同一道墙（dsh-layered-memory 的"每步自动注入"即一例）。
 
@@ -75,8 +76,9 @@
 
 ### 7. 仓库与安装
 
-- 代码：**https://github.com/QIANLING-0831/dsh-memory-plus**（`packages/dsh-session-query-sqlite-cjk`）
+- 代码：**https://github.com/QIANLING-0831/dsh-memory-plus**（`packages/dsh-session-query-sqlite-cjk` + 新增 `packages/dsh-memory-skills`）
 - 上帖 #3671 全文含插件集介绍、真机验证报告与安装路径；本迭代的 README（含对照表）见包内 `README.md`；
-- DSH 记忆生态盘点（20+ 项目 + license 自查）见 [`docs/DSH-MEMORY-ECOSYSTEM.md`](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/DSH-MEMORY-ECOSYSTEM.md)。
+- DSH 记忆生态盘点（20+ 项目 + license 自查）见 [`docs/DSH-MEMORY-ECOSYSTEM.md`](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/DSH-MEMORY-ECOSYSTEM.md)；
+- 技能管理器 / 后台自我进化的真机验证步骤见 [`docs/VERIFICATION.md`](https://github.com/QIANLING-0831/dsh-memory-plus/blob/main/docs/VERIFICATION.md)（欢迎按步骤反馈结果）。
 
 欢迎试用、提 issue、评论指正。

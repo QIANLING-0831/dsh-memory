@@ -1,0 +1,122 @@
+# dsh-memory
+
+A community plugin suite (`dsh-plugin`) that makes DeepSeek Harness (DSH) memory actually work: CJK-capable full-text session search, tool-result dedup, hybrid memory retrieval, cross-session core memory, near-lossless compaction, and a **skill manager with background self-evolution**. Phases 0–3 are implemented (0–2 integration-verified on a real harness; Phase 3 verification steps in [`docs/VERIFICATION.md`](docs/VERIFICATION.md)); 65 unit tests pass.
+
+---
+
+## Why this is not "yet another memory plugin"
+
+20+ memory plugins have appeared for DSH in the past six months (dsh-memory-evolve 205★ / dsh-mnemon 136★ / dsh-noema 116★ …). Most are single-purpose plugins, and almost all sit on top of the official `sessionQuery` service — whose `unicode61` tokenizer cannot segment Chinese, so **the entire ecosystem's Chinese recall is broken by one shared foundation bug**.
+
+This repository is a **memory family bundle that fixes the foundation**:
+
+1. **CJK search fix (unique in the ecosystem)** — trigram dual tables + a 1–2 char LIKE fallback; every memory plugin benefits (measured: 0 hits upstream → full hits with this bundle).
+2. **Skill self-evolution** — `skill_write/delete/list` plus a background reflection loop that distills reusable skills from finished turns (Hermes-style learning loop, zero request-path overhead).
+3. **Token dedup** — hash-dedup of repeated tool results, saving input tokens.
+4. **KV-safe stable injection** — injection discipline derived from source-level findings (`buildRequest` deepFreeze / KV prefix-cache invalidation / persistent-log pollution).
+5. **Compaction provenance** — near-lossless summaries with exact source locators (spill path / file / seq range).
+
+Ecosystem survey (20+ projects, with license self-check): [`docs/DSH-MEMORY-ECOSYSTEM.md`](docs/DSH-MEMORY-ECOSYSTEM.md).
+
+---
+
+## 1. Packages
+
+| Package | What it does | Phase |
+|---|---|---|
+| [`dsh-session-query-sqlite-cjk`](packages/dsh-session-query-sqlite-cjk) | CJK-capable `sessionQuery` provider: FTS5 dual tokenizer (unicode61 + trigram) with automatic routing and a 1–2 char CJK LIKE fallback | 0 |
+| [`dsh-tool-result-dedup`](packages/dsh-tool-result-dedup) | Hash-dedup of repeated tool results (`git status` / `ls` / repeated `read`) → pointer, saving input tokens | 0 |
+| [`dsh-memory-index`](packages/dsh-memory-index) | Hybrid memory search service `ctx.memorySearch`: sqlite-vec vector arm + FTS5 lexical arm → RRF fusion; incremental per-event embedding; file-tag filtering | 1 |
+| [`dsh-memory-tool`](packages/dsh-memory-tool) | Model-facing `memory_search` tool: bounded hybrid recall over the current session's earlier conversation | 1 |
+| [`dsh-compaction-locator`](packages/dsh-compaction-locator) | Near-lossless compaction: every `<compacted-summary>` carries Exact Sources locators (spill path / file path / seq range) | 2 |
+| [`dsh-memory-core`](packages/dsh-memory-core) | Cross-session core memory: workspace fact store + stable system-prompt section injection (KV-safe) + `memory_remember` tool | 2 |
+| [`dsh-memory-skills`](packages/dsh-memory-skills) | Skill manager + background self-evolution: `skill_write/delete/list` persist DSH-native skill files; a timer-driven reflection loop distills reusable skills from finished turns | 3 |
+| [`dsh-memory-bundle`](packages/dsh-memory-bundle) | Meta-bundle: one-command install of everything, auto-disabling conflicting base rows | integration |
+
+---
+
+## 2. Background: the DSH memory pipeline today
+
+### 2.1 `unicode61` is effectively unusable for Chinese (upstream defect)
+
+`dsh-session-query-sqlite` uses the FTS5 `unicode61` tokenizer, which does **not segment CJK text**: a run of Han characters becomes a single token. Measured (node:sqlite + FTS5):
+
+| Query against `索引优化减少Token消耗的句子` | unicode61 (upstream) | trigram (this plugin) |
+|---|---|---|
+| `Token消耗` | ❌ 0 hits | ✅ hits |
+| `"索引优化"` (whole phrase) | ❌ 0 hits (must reproduce the full sentence) | ✅ hits |
+
+### 2.2 The memory pipeline is "write-only"
+
+- **compaction**: lossy summaries; old details vanish unless spilled at the time;
+- **spill**: large results leave context, but recall means the model guessing paths with `read`/`grep`;
+- **indexing** (FTS5) only serves callers that actively search — it is **never wired back into model context**.
+
+**Core insight**: make indexing a real channel from memory back into context — old content becomes precisely retrievable, so the context tail can stay short, compaction pressure drops, and identical content is never re-sent.
+
+---
+
+## 3. Architecture: three-layer memory + entry tags + incremental driving
+
+| Layer | Content | Write semantics | Storage |
+|---|---|---|---|
+| working | current context (surface cursor) | slides every step | no store — it is the context |
+| archival | full text of old events (shadowed/log-only) | **append-only** (log immutable; derived tags updatable) | derived SQLite: chunks + vec0 vectors + FTS5 |
+| core | distilled cross-session facts (preferences/conventions/environment/decisions) | **CRUD**: hash dedup + similarity merge | derived SQLite: `core_facts` |
+| dedup | tool-result hash table | pointer on hit | in-process (Phase 0 MVP) |
+| skills | reusable skill files | CRUD via `skill_write/delete` + background evolution | DSH-native Markdown files (`$DSH_HOME/skills`) |
+
+### Query pipeline
+
+```
+Stage 1  entry exact filter (file:/tool:/hash:, zero embedding) → candidate set
+Stage 2  hybrid retrieval: FTS5 lexical + vector semantic → RRF fusion → rerank
+Stage 3  merge candidates → pointers for already-visible items → budget trim
+```
+
+### Background self-evolution (Hermes-style, DSH-disciplined)
+
+`dsh-memory-skills` runs a fire-and-forget timer (default 60 s) that scans live sessions past a per-session watermark. Heuristic gates (assistant message length), a cooldown, and a bounded event window keep LLM cost flat. When triggered, it asks the model once — strict JSON contract — whether a finished turn produced a reusable skill, then writes/updates a DSH-native skill file atomically. Everything is logged to the derived DB (`skill_events`), and skill files are plain Markdown, so they survive plugin removal.
+
+---
+
+## 4. Install
+
+> Not yet published to npm. Three ways to get it:
+
+```sh
+git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
+cd dsh-memory-plus
+# Windows one-shot:
+.\scripts\install.ps1 -Profile headless
+# or manually:
+dsh plugin --profile <profile> add packages/dsh-memory-bundle
+cd $env:DSH_HOME/profiles/<profile> && pnpm install
+```
+
+Plugin defaults live in [`packages/dsh-memory-bundle/cordis.patch.yml`](packages/dsh-memory-bundle/cordis.patch.yml) (relative derived-DB paths — use absolute paths in production).
+
+## 5. Usage
+
+The model gets five tools:
+
+- `memory_search(query, limit, max_chars, file?)` — bounded hybrid recall over the current session's earlier conversation;
+- `memory_remember(content, topic?)` — write a durable cross-session fact; it appears at the top of later requests in the same workspace (`## Persistent Memory` block);
+- `skill_write(name, description, whenToUse?, content)` — create/update a reusable skill (DSH-native skill file, immediately visible to the session skill catalog);
+- `skill_delete(name)` / `skill_list()` — delete / list skills.
+
+## 6. Verification
+
+Real-harness results (headless profile): full-tree startup with 8 plugins ✅, `memory_remember` ✅, `memory_search` Chinese recall ✅ (3 real records), cross-session persistence ✅. Step-by-step verification for the newer plugins (`dsh-memory-skills` and friends): [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
+
+## 7. Roadmap & open items
+
+- ✅ Phase 0: CJK search fix + tool-result dedup
+- ✅ Phase 1: hybrid search service + `memory_search` tool
+- ✅ Phase 2: near-lossless compaction + cross-session core memory + file entity index
+- ✅ Phase 3: skill manager + background self-evolution
+- ⏳ Real-machine trigger verification for compaction/dedup/skills; bge real-embedding verification; auto recall injection once DSH provides a "non-persistent, tail-append" seam
+
+## License
+
+MIT. `dsh-session-query-sqlite-cjk` is a fork of `@deepseek-ai/dsh-session-query-sqlite` (MIT).

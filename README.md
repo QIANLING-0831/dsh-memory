@@ -1,6 +1,22 @@
 # dsh-memory
 
-DeepSeek Harness（DSH）记忆优化的社区插件集（`dsh-plugin`）：中文可用的会话全文检索、工具结果去重、混合记忆检索、跨会话核心记忆、近无损压缩。Phase 0–2 已完成，并在真实 harness（headless profile）中集成验证，47 个单测通过。
+DeepSeek Harness（DSH）记忆优化的社区插件集（`dsh-plugin`）：中文可用的会话全文检索、工具结果去重、混合记忆检索、跨会话核心记忆、近无损压缩、**技能管理器 + 后台自我进化**。Phase 0–3 已落地，并在真实 harness（headless profile）中集成验证，65 个单测通过。
+
+---
+
+## 0. 为什么不是"第 16 个记忆插件"
+
+DSH 记忆插件半年内涌现 20+（dsh-memory-evolve 205⭐ / dsh-mnemon 136⭐ / dsh-noema 116⭐ …），但绝大多数是**单点功能插件**，且几乎都建立在官方 `sessionQuery` 之上——而官方 unicode61 的中文缺陷意味着**整个生态的中文召回都是坏的**。
+
+本仓库的定位是**记忆全家桶 + 修地基**：
+
+1. **CJK 检索修复（生态唯一）**：trigram 双表 + 1–2 字 LIKE 回退——20+ 记忆插件共同受益（实测 0 命中 → 全命中）；
+2. **技能自我进化**：`skill_write/delete/list` + 后台反思蒸馏（Hermes 式学习循环，请求路径零开销）；
+3. **Token 去重**：工具结果哈希去重，纯省输入 Token；
+4. **KV-safe 稳定注入**：基于源码级验证（`buildRequest` deepFreeze / KV 前缀缓存 / 持久化路径）的注入纪律；
+5. **compaction 来源定位**：近无损压缩 + 摘要可溯源。
+
+生态盘点（20+ 项目对照表 + license 自查）：[`docs/DSH-MEMORY-ECOSYSTEM.md`](docs/DSH-MEMORY-ECOSYSTEM.md)。
 
 ---
 
@@ -14,6 +30,7 @@ DeepSeek Harness（DSH）记忆优化的社区插件集（`dsh-plugin`）：中�
 | [`dsh-memory-tool`](packages/dsh-memory-tool) | 模型可调用的 `memory_search` 工具：会话旧内容混合召回，输出有界 | Phase 1 |
 | [`dsh-compaction-locator`](packages/dsh-compaction-locator) | 近无损压缩：每个 `<compacted-summary>` 追加 Exact Sources 定位符（spill 路径 / 文件路径 / seq 区间） | Phase 2 |
 | [`dsh-memory-core`](packages/dsh-memory-core) | 跨会话核心记忆：workspace 事实库 + 稳定 system-prompt section 注入（KV 安全）+ `memory_remember` 工具 | Phase 2 |
+| [`dsh-memory-skills`](packages/dsh-memory-skills) | 技能管理器 + 后台自我进化：`skill_write/delete/list` 写 DSH 原生技能文件；定时反思从完成回合蒸馏可复用技能（Hermes 式学习循环） | Phase 3 |
 | [`dsh-memory-bundle`](packages/dsh-memory-bundle) | 元 bundle：一键安装以上全部插件，自动禁用 base 的 session-query / compaction 行 | 集成 |
 
 ---
@@ -103,7 +120,7 @@ cd dsh-memory
 git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
 cd dsh-memory
 dsh plugin --profile <profile> add packages/dsh-memory-bundle
-dsh plugin --profile <profile> add packages/dsh-session-query-sqlite-cjk packages/dsh-tool-result-dedup packages/dsh-memory-index packages/dsh-memory-tool packages/dsh-compaction-locator packages/dsh-memory-core
+dsh plugin --profile <profile> add packages/dsh-session-query-sqlite-cjk packages/dsh-tool-result-dedup packages/dsh-memory-index packages/dsh-memory-tool packages/dsh-compaction-locator packages/dsh-memory-core packages/dsh-memory-skills
 cd $env:DSH_HOME/profiles/<profile> && pnpm install
 ```
 
@@ -117,10 +134,14 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 ## 5. 使用
 
-模型获得两个记忆工具：
+模型获得五个记忆/技能工具：
 
 - `memory_search(query, limit, max_chars, file?)`：对本会话旧内容做混合（词法 + 语义）召回，snippet 严格有界；
-- `memory_remember(content, topic?)`：写入跨会话持久事实，自动出现在该 workspace 后续请求的系统提示顶部（`## Persistent Memory` 区块）。
+- `memory_remember(content, topic?)`：写入跨会话持久事实，自动出现在该 workspace 后续请求的系统提示顶部（`## Persistent Memory` 区块）；
+- `skill_write(name, description, whenToUse?, content)`：创建/更新可复用技能（写 DSH 原生技能文件，**立即进入会话技能目录**）；
+- `skill_delete(name)` / `skill_list()`：删除 / 列出技能。
+
+**后台自我进化**：`dsh-memory-skills` 定时（默认 60s）扫描已完成回合，按每会话水位线 + 冷却期 + 启发式门槛触发一次 LLM 反思（"这段回合是否产生可复用技能？"），命中即自动写入技能文件——fire-and-forget，请求路径零开销，全部动作记入派生库 `skill_events` 日志。
 
 `<compacted-summary>` 压缩块自带定位符（`## Exact Sources (locators)`），模型可用 `read <spill file>` 或 `memory_search` 恢复精确内容。
 
@@ -132,10 +153,11 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 | 项目 | 结果 |
 |---|---|
-| 整树启动（6 插件 + 禁用 base 冲突行） | ✅ |
+| 整树启动（7 插件已验证 + `memory-skills` 待验证） | ✅ |
 | `memory_remember` 写入 | ✅ 返回「已记住 (uuid)」 |
 | `memory_search` 混合召回（中文查询） | ✅ 命中 3 条真实会话记录 |
 | **跨会话持久化**（新会话系统提示注入） | ✅ 逐字可见 |
+| 技能工具 + 后台自我进化（`dsh-memory-skills`） | ⏳ 验证步骤见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md) |
 
 跨会话实测输出（新会话）：
 
@@ -168,10 +190,10 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 ```sh
 corepack pnpm install
-corepack pnpm test        # 47 个单测（node --test，6 个包）
+corepack pnpm test        # 65 个单测（node --test，8 个包）
 ```
 
-每个插件遵循 DSH 插件形态（`name` / `inject` / `Config` / `apply`，或 Service 类 + `super(ctx, name)`），测试覆盖检索、去重、压缩定位符、事实库等核心逻辑。
+每个插件遵循 DSH 插件形态（`name` / `inject` / `Config` / `apply`，或 Service 类 + `super(ctx, name)`），测试覆盖检索、去重、压缩定位符、事实库、技能管理与后台进化等核心逻辑。
 
 ---
 
@@ -199,7 +221,8 @@ corepack pnpm test        # 47 个单测（node --test，6 个包）
 - ✅ Phase 0：CJK 检索修复 + 工具结果去重
 - ✅ Phase 1：混合检索服务 + `memory_search` 工具
 - ✅ Phase 2：近无损压缩 + 跨会话核心记忆 + file 实体索引
-- ⏳ 遗留：compaction-locator / dedup 的真机触发验证（需长会话 + 重复结果）；bge 真嵌入验证；自动 recall 注入待 DSH 提供"非持久化 + 尾部追加"接缝
+- ✅ Phase 3：技能管理器 + 后台自我进化（Hermes 式学习循环落地，见 `dsh-memory-skills`）
+- ⏳ 遗留：compaction-locator / dedup / memory-skills 的真机触发验证（见 [`docs/VERIFICATION.md`](docs/VERIFICATION.md)）；bge 真嵌入验证；自动 recall 注入待 DSH 提供"非持久化 + 尾部追加"接缝
 
 ---
 
