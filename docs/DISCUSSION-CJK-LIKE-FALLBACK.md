@@ -67,7 +67,7 @@
 
 ### 6. 仓库与安装
 
-- 代码：**https://github.com/QIANLING-0831/dsh-memory**（`packages/dsh-session-query-sqlite-cjk`）
+- 代码：**https://github.com/QIANLING-0831/dsh-memory-plus**（`packages/dsh-session-query-sqlite-cjk`）
 - 上帖 #3671 全文含插件集介绍、真机验证报告与安装路径；本迭代的 README（含对照表）见包内 `README.md`。
 
 欢迎试用、提 issue、评论指正。

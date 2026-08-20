@@ -85,12 +85,12 @@ Stage 3  合并候选 → 已在上下文的替换为指针 → 预算裁剪
 
 ## 4. 安装
 
-> **尚未发布到 npm**。三种方式均可下载/安装；Release 源码包见 [Releases](https://github.com/QIANLING-0831/dsh-memory/releases)（Source code zip）。
+> **尚未发布到 npm**。三种方式均可下载/安装；Release 源码包见 [Releases](https://github.com/QIANLING-0831/dsh-memory-plus/releases)（Source code zip）。
 
 ### 方式一：克隆 + 一键脚本（推荐，已验证）
 
 ```sh
-git clone https://github.com/QIANLING-0831/dsh-memory.git
+git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
 cd dsh-memory
 # Windows：
 .\scripts\install.ps1 -Profile headless
@@ -100,7 +100,7 @@ cd dsh-memory
 ### 方式二：克隆 + 手动安装
 
 ```sh
-git clone https://github.com/QIANLING-0831/dsh-memory.git
+git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
 cd dsh-memory
 dsh plugin --profile <profile> add packages/dsh-memory-bundle
 dsh plugin --profile <profile> add packages/dsh-session-query-sqlite-cjk packages/dsh-tool-result-dedup packages/dsh-memory-index packages/dsh-memory-tool packages/dsh-compaction-locator packages/dsh-memory-core
@@ -109,7 +109,7 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 ### 方式三：下载 Release 源码包
 
-到 [Releases](https://github.com/QIANLING-0831/dsh-memory/releases) 下载 `Source code (zip)` → 解压 → 按方式二从解压目录安装。
+到 [Releases](https://github.com/QIANLING-0831/dsh-memory-plus/releases) 下载 `Source code (zip)` → 解压 → 按方式二从解压目录安装。
 
 安装后各插件默认配置见 [`packages/dsh-memory-bundle/cordis.patch.yml`](packages/dsh-memory-bundle/cordis.patch.yml)（派生库路径为相对路径，生产建议改绝对路径）。生产嵌入需在 `memory-index` 配置 `embedder.kind: transformers` 并安装 `@huggingface/transformers`（当前默认 `char-overlap` 评估嵌入；国内模型下载用 `remoteHost: https://hf-mirror.com`）。
 
