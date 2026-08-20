@@ -1,0 +1,14 @@
+{
+  "name": "kimi-memory-plus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kimi Code adapter for @qianling/memory-engine.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@qianling/memory-engine": "workspace:*"
+  }
+}

@@ -1,6 +1,10 @@
-# dsh-memory
+# Memory Plus
 
-DeepSeek Harness（DSH）记忆优化的社区插件集（`dsh-plugin`）：中文可用的会话全文检索、工具结果去重、混合记忆检索、跨会话核心记忆、近无损压缩。Phase 0–2 已完成，并在真实 harness（headless profile）中集成验证，47 个单测通过。
+面向编码 Agent 的 workspace 记忆引擎，目前提供 DeepSeek Harness（DSH）和 Kimi Code 两套 Adapter。DSH 版包含中文会话全文检索、工具结果去重、混合检索、跨会话核心记忆和近无损压缩；Kimi 版提供 MCP 记忆工具、跨会话事实库、会话归档检索和增量索引 Hooks。当前共有 56 项自动化测试。
+
+> Kimi Adapter 当前是 MVP：归档检索采用有界词法匹配；DSH 的向量检索、工具结果替换和 compaction locator 尚未直接移植，因为 Kimi 的公开 Plugin Hooks 不允许改写工具结果或压缩摘要。
+
+可查看[明确标注为合成数据的 Kimi 演示](docs/KIMI-SYNTHETIC-DEMO.md)了解调用流程；它不是性能基准。
 
 ---
 
@@ -8,6 +12,8 @@ DeepSeek Harness（DSH）记忆优化的社区插件集（`dsh-plugin`）：中�
 
 | 包 | 作用 | 阶段 |
 |---|---|---|
+| [`@qianling/memory-engine`](packages/memory-engine) | 与平台无关的 workspace 事实库与归档检索深模块 | 通用引擎 |
+| [`kimi-memory-plus`](packages/kimi-memory-plugin) | Kimi Plugin：MCP 工具、Skill、系统提示词和会话索引 Hooks | Kimi MVP |
 | [`dsh-session-query-sqlite-cjk`](packages/dsh-session-query-sqlite-cjk) | 中文可用的会话全文检索 provider：FTS5 双 tokenizer 双表（unicode61 + trigram），按查询是否含 CJK 自动路由 | Phase 0 |
 | [`dsh-tool-result-dedup`](packages/dsh-tool-result-dedup) | 工具结果哈希去重：重复结果（git status / ls / 重复 read）替换为指针，节省输入 Token | Phase 0 |
 | [`dsh-memory-index`](packages/dsh-memory-index) | 混合记忆检索服务 `ctx.memorySearch`：sqlite-vec 向量臂 + FTS5 词法臂 → RRF 融合；事件级增量嵌入；file 词条过滤 | Phase 1 |
@@ -85,13 +91,26 @@ Stage 3  合并候选 → 已在上下文的替换为指针 → 预算裁剪
 
 ## 4. 安装
 
-> **尚未发布到 npm**。三种方式均可下载/安装；Release 源码包见 [Releases](https://github.com/QIANLING-0831/dsh-memory/releases)（Source code zip）。
+### Kimi Code
+
+Kimi Code 可以直接从 GitHub 安装根目录的 `kimi.plugin.json`：
+
+```text
+/plugins install https://github.com/QIANLING-0831/dsh-memory-plus
+/reload
+```
+
+安装后会提供 `memory_search`、`memory_remember`、`memory_list`、`memory_forget` 和 `memory_status`。记忆库默认位于 `$KIMI_CODE_HOME/memory-plus/memory.db`；设置 `KIMI_MEMORY_DISABLE_ARCHIVE=1` 可关闭会话内容归档，但保留显式 core memory。详见 [Kimi Adapter 文档](packages/kimi-memory-plugin/README.md)。
+
+### DeepSeek Harness
+
+> DSH 包尚未发布到 npm。三种方式均可下载/安装；Release 源码包见 [Releases](https://github.com/QIANLING-0831/dsh-memory-plus/releases)（Source code zip）。
 
 ### 方式一：克隆 + 一键脚本（推荐，已验证）
 
 ```sh
-git clone https://github.com/QIANLING-0831/dsh-memory.git
-cd dsh-memory
+git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
+cd dsh-memory-plus
 # Windows：
 .\scripts\install.ps1 -Profile headless
 # Linux/macOS：等价命令见 scripts/ 目录
@@ -100,8 +119,8 @@ cd dsh-memory
 ### 方式二：克隆 + 手动安装
 
 ```sh
-git clone https://github.com/QIANLING-0831/dsh-memory.git
-cd dsh-memory
+git clone https://github.com/QIANLING-0831/dsh-memory-plus.git
+cd dsh-memory-plus
 dsh plugin --profile <profile> add packages/dsh-memory-bundle
 dsh plugin --profile <profile> add packages/dsh-session-query-sqlite-cjk packages/dsh-tool-result-dedup packages/dsh-memory-index packages/dsh-memory-tool packages/dsh-compaction-locator packages/dsh-memory-core
 cd $env:DSH_HOME/profiles/<profile> && pnpm install
@@ -109,13 +128,13 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 ### 方式三：下载 Release 源码包
 
-到 [Releases](https://github.com/QIANLING-0831/dsh-memory/releases) 下载 `Source code (zip)` → 解压 → 按方式二从解压目录安装。
+到 [Releases](https://github.com/QIANLING-0831/dsh-memory-plus/releases) 下载 `Source code (zip)` → 解压 → 按方式二从解压目录安装。
 
 安装后各插件默认配置见 [`packages/dsh-memory-bundle/cordis.patch.yml`](packages/dsh-memory-bundle/cordis.patch.yml)（派生库路径为相对路径，生产建议改绝对路径）。生产嵌入需在 `memory-index` 配置 `embedder.kind: transformers` 并安装 `@huggingface/transformers`（当前默认 `char-overlap` 评估嵌入；国内模型下载用 `remoteHost: https://hf-mirror.com`）。
 
 ---
 
-## 5. 使用
+## 5. DSH 使用
 
 模型获得两个记忆工具：
 
@@ -168,7 +187,7 @@ cd $env:DSH_HOME/profiles/<profile> && pnpm install
 
 ```sh
 corepack pnpm install
-corepack pnpm test        # 47 个单测（node --test，6 个包）
+corepack pnpm test        # 56 项测试（node --test，DSH + 通用引擎 + Kimi Adapter）
 ```
 
 每个插件遵循 DSH 插件形态（`name` / `inject` / `Config` / `apply`，或 Service 类 + `super(ctx, name)`），测试覆盖检索、去重、压缩定位符、事实库等核心逻辑。

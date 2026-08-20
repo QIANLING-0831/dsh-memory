@@ -1,10 +1,10 @@
 {
-  "name": "dsh-memory",
+  "name": "memory-plus",
   "private": true,
-  "description": "DSH memory optimization plugins — CJK-aware session full-text search provider and tool-result hash dedup. Community plugins for the DeepSeek Harness ecosystem (dsh-plugin).",
+  "description": "Workspace memory engine with adapters for DeepSeek Harness and Kimi Code.",
   "version": "0.1.0",
   "license": "MIT",
   "scripts": {
-    "test": "node --test packages/dsh-session-query-sqlite-cjk/test/cjk.test.js packages/dsh-tool-result-dedup/test/dedup.test.js packages/dsh-memory-index/test/memory-index.test.js packages/dsh-memory-tool/test/memory-tool.test.js packages/dsh-compaction-locator/test/compaction-locator.test.js packages/dsh-memory-core/test/memory-core.test.js"
+    "test": "node --test packages/*/test/*.test.js"
   }
 }
