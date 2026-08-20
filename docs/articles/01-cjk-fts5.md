@@ -1,5 +1,12 @@
 # DeepSeek Harness 中文检索为什么搜不到「消耗」两个字？—— unicode61 缺陷 + trigram + LIKE 回退的完整修复
 
+<!-- ===== CSDN 发布信息 ===== -->
+> 🖼️ **封面图**（建议 1200×600）：主标题「中文检索 0 命中 → 全命中」+ 副标题「unicode61 → trigram + LIKE 回退」，深蓝/科技风背景。CSDN「上传封面」处设置；如需正文内嵌，替换下方占位：
+> `![封面占位](上传封面后替换此路径)`
+> 🏷️ **标签**：#DeepSeek-Harness #FTS5 #中文全文检索 #trigram #SQLite
+> 🔍 **关键词**：DeepSeek Harness 中文检索, FTS5 unicode61, trigram tokenizer, LIKE 回退, sessionQuery, CJK 分词
+<!-- ============================ -->
+
 > 摘要：DeepSeek Harness 的会话全文检索（`sessionQuery`）用 SQLite FTS5 的 `unicode61` tokenizer，**对连续汉字不切词**——整段中文被当成一个 token，且查询被整体包成单短语。结果是 `"Token消耗"`、`"索引优化"` 这类中文子串查询**必然 0 命中**。本文从源码机制讲清楚为什么，给出可复现的 node:sqlite 验证，并分享一套 `trigram 双表 + 1–2 字 LIKE 回退` 的完整修复（含通配符转义与 snippet 处理）。
 
 ---

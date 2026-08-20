@@ -1,5 +1,12 @@
 # Agent 技能自我进化：Hermes 式学习循环在 DeepSeek Harness 上的落地
 
+<!-- ===== CSDN 发布信息 ===== -->
+> 🖼️ **封面图**（建议 1200×600）：主标题「Agent 学会新技能」+ 副标题「后台反思蒸馏：回合 → 技能」，齿轮/进化/循环主题 + 深色底。CSDN「上传封面」处设置；如需正文内嵌，替换下方占位：
+> `![封面占位](上传封面后替换此路径)`
+> 🏷️ **标签**：#Agent自进化 #技能管理 #Hermes #学习循环 #DeepSeek-Harness
+> 🔍 **关键词**：Agent 技能自我进化, Hermes 学习循环, skill_write, 后台反思蒸馏, DeepSeek Harness
+<!-- ============================ -->
+
 > 摘要：让 Agent 从自己完成的回合里"学会新技能"，是 Nous Research Hermes Agent 等自进化框架的标志能力。本文拆解它落到 DeepSeek Harness（DSH）要过哪几道坎：DSH 原生 skill 系统的文件格式与注入方式、模型可调的技能管理器工具、以及一个**后台定时反思蒸馏**循环（水位线 + 冷却 + 启发式门槛 + 严格 JSON 契约 + 原子写），并给出一套可运行的实现 `dsh-memory-skills`（MIT）。
 
 ---

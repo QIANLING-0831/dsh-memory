@@ -1,5 +1,12 @@
 # 给 DeepSeek Harness 装上记忆：三层记忆架构 + 混合检索(RRF) + 工具去重
 
+<!-- ===== CSDN 发布信息 ===== -->
+> 🖼️ **封面图**（建议 1200×600）：主标题「给 Agent 装上记忆」+ 副标题「working / archival / core 三层」，分层架构示意 + 蓝紫渐变。CSDN「上传封面」处设置；如需正文内嵌，替换下方占位：
+> `![封面占位](上传封面后替换此路径)`
+> 🏷️ **标签**：#Agent记忆 #架构设计 #混合检索 #RRF #sqlite-vec #DeepSeek-Harness
+> 🔍 **关键词**：Agent 记忆架构, 三层记忆, RRF 融合, sqlite-vec, FTS5 混合检索, DeepSeek Harness
+<!-- ============================ -->
+
 > 摘要：DeepSeek Harness（DSH）的记忆链路当前"只出不进"——旧上下文被 compaction/spill 挪走后，召回靠模型自己 `read`/`grep` 猜路径。本文分享一套开源插件集的架构：`working / archival / core` 三层记忆 + FTS5×sqlite-vec 混合检索（RRF 融合）+ 工具结果去重 + KV-safe 稳定注入。不依赖任何 LLM 做元数据，全部来自事件自带信息。
 
 ---
